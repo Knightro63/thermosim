@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:thermo_sim/thermosim.dart';
+import 'package:thermo_sim/thermosim_old.dart';
 
 void main() {
   runApp(const MyApp());
