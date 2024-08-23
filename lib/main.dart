@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:thermo_sim/thermosim_old.dart';
+import 'softbody/simulation.dart';
+//import 'cannon_physics/thermosim.dart';
 
 void main() {
   runApp(const MyApp());
@@ -16,7 +18,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: const Thermosim(),
+      home: const ThermoSim(),
     );
   }
 }

@@ -23,7 +23,6 @@ class _ThermosimPageState extends State<Thermosim> {
   FocusNode node = FocusNode();
   late three.ThreeJS threeJs;
   late three.OrbitControls controls;
-  int? fboId;
 
   late three.BufferGeometry clothGeometry;
   late three.Object3D buck;

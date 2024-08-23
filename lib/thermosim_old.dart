@@ -65,7 +65,6 @@ class _ThermosimState extends State<Thermosim> {
     super.dispose();
   }
 
-
   // this function sets up the threeJs.scene
   Future<void> setup() async {
     cloth = Cloth(xSegments, ySegments);
@@ -88,38 +87,38 @@ class _ThermosimState extends State<Thermosim> {
     light.target!.position.setValues(0, 0, 0);
     threeJs.scene.add(light);
 
-    // background
-    three.BufferGeometry buffgeoBack = IcosahedronGeometry(3000, 2);
-    three.Mesh back = three.Mesh(buffgeoBack, three.MeshLambertMaterial());
-    threeJs.scene.add(back);
-
     // creating a sphere in three_dart
-    //three.SphereGeometry sphereGeo = three.SphereGeometry(ballSize, 32, 16);
-    three.Material sphereMat = three.MeshPhongMaterial.fromMap({'color': 0xffffff});//, 'wireframe': true});
+    TorusKnotGeometry sphereGeo = TorusKnotGeometry(ballSize, ballSize/3);
+    three.Material sphereMat = three.MeshPhongMaterial.fromMap({
+      'color': 0xffffff, 
+      'wireframe': true,
+      'side': three.DoubleSide
+    });
 
     // import obj
-    three.OBJLoader objLoader = three.OBJLoader(null);
-    three.Object3D object = (await objLoader.fromAsset('assets/obj/Serenity_key_Hand_Left.obj'))!;
+    // three.OBJLoader objLoader = three.OBJLoader();
+    // buck = (await objLoader.fromAsset('assets/obj/Serenity_key_Hand_Left.obj'))!;
+    // for(final child in buck.children){
+    //   child.position.x = -100;
+    // }
 
+    buck = three.Mesh(sphereGeo,sphereMat);
+    buck.rotateX(math.pi/2);
     // using scale might break things
     // object.scale.set(50, 50, 50);
-    object.children[0].geometry!;
-    object.updateMatrix();
-
-    buck = object;
+    buck.updateMatrix();
 
     // set up bounding box
-    buck.children[0].geometry!.computeBoundingBox();
-    three.Vector3 boxMin = buck.children[0].geometry!.boundingBox!.min;
-    three.Vector3 boxMax = buck.children[0].geometry!.boundingBox!.max;
-    boundBox.set(boxMin.scale(1.01), boxMax.scale(1.01));
+    //buck.geometry!.computeBoundingBox();
+    boundBox.setFromObject(buck);
+    boundBox.min.scale(1.01);
+    boundBox.max.scale(1.01);
 
-    BoxHelper boxHelper = BoxHelper(buck);
-    buck.add(boxHelper);
+    //BoxHelper boxHelper = BoxHelper(buck);
+    //buck.add(boxHelper);
 
-    object.children[0].material = sphereMat;
-
-    threeJs.scene.add(object);
+    buck.material = sphereMat;
+    threeJs.scene.add(buck);
 
     // texture loader for uv grid
     final loader = three.TextureLoader();
@@ -144,7 +143,7 @@ class _ThermosimState extends State<Thermosim> {
   void animate() {
     if (!pauseSim) {
       if (liftBuck) {
-        if (buck.position.y > 150) liftBuck = false;
+        if (buck.position.y > 100) liftBuck = false;
         buck.position.y += liftSpeed;
         boundBox.min.add( three.Vector3(0, liftSpeed, 0) );
         boundBox.max.add( three.Vector3(0, liftSpeed, 0) );
@@ -153,8 +152,8 @@ class _ThermosimState extends State<Thermosim> {
 
       final List<Particle> p = cloth.particles;
 
-      threadSimulate(p);
-      //simulate(p);
+      //threadSimulate(p);
+      simulate(p);
 
       for (int i = 0, il = p.length; i < il; i++) {
         // if (cloth.rigid[i]) continue;
@@ -226,10 +225,10 @@ class _ThermosimState extends State<Thermosim> {
         if (particle.rigid) continue;
 
         final three.Vector3 forceToCenter = three.Vector3();
-        forceToCenter.sub2(buck.position.clone()..y -= 20, particle.position);
-        forceToCenter.y -= ballSize;
+        forceToCenter.sub2(three.Vector3(0,75,0), particle.position);
+        //forceToCenter.y -= ballSize;
         forceToCenter.normalize();
-        forceToCenter.scale(1000);
+        forceToCenter.scale(100);
         particle.addForce(forceToCenter);
         particle.integrate(trimstepSq);
         if (particle.position.y < boundBox.min.y) particle.rigid = true;
@@ -239,13 +238,8 @@ class _ThermosimState extends State<Thermosim> {
     // detect collisions
     detectCollisions(particles);
 
-    // contraints for cloth
-    final constraints = cloth.constraints;
-    final int il = constraints.length;
-
     // satisfy constraints of the cloth/plastic sheet
-    for (int i = 0; i < il; i++) {
-      final List constraint = constraints[i];
+    for (final List constraint in cloth.constraints) {
       satisfyConstraints(constraint[0], constraint[1], constraint[2]);
     }
 
@@ -341,6 +335,28 @@ class _ThermosimState extends State<Thermosim> {
   }
 
   void detectCollisions(List<Particle> particleList) {
+    for (final currParticle in particleList) {
+      if (boundBox.containsPoint(currParticle.position)) {
+        if (currParticle.rigid && liftBuck) {
+          currParticle.position.y += liftSpeed;
+          continue;
+        } else if (currParticle.rigid) {
+          continue;
+        }
+
+
+        three.Vector3 point = three.Vector3.copy(currParticle.position);
+        three.Raycaster raycaster = three.Raycaster(point, three.Vector3(0,1,0));
+        List<three.Intersection> intersects = raycaster.intersectObject(buck, false);
+        if (intersects.isNotEmpty)  {
+          //print('hit');
+          currParticle.rigid = true;
+          currParticle.position.y += liftSpeed;
+        }
+      }
+    }
+  }
+  void detectCollisions1(List<Particle> particleList) {
     List allVerts = (buck.children[0].geometry!.getAttributeFromString('position')
             as three.BufferAttribute)
         .array
@@ -718,8 +734,8 @@ class _ThermosimState extends State<Thermosim> {
       // if (firstCollide) print(correctionHalf.toJSON());
     }
 
-    // if (!p1.rigid) p1.position.add(correctionHalf);
-    // if (!p2.rigid) p2.position.sub(correctionHalf);
+    if (!p1.rigid) p1.position.add(correctionHalf);
+    if (!p2.rigid) p2.position.sub(correctionHalf);
   }
 
   // currently an unused function - can be deleted
@@ -748,8 +764,7 @@ class _ThermosimState extends State<Thermosim> {
   }
 
   // can be used for debugging
-  three.Mesh createSphere(three.Vector3 center, int color,
-      {double size = 1, three.Object3D? attach}) {
+  three.Mesh createSphere(three.Vector3 center, int color,{double size = 1, three.Object3D? attach}) {
     three.SphereGeometry sphereGeo = three.SphereGeometry(size, 8, 8);
     three.Material mat = three.MeshBasicMaterial.fromMap({"color": color});
     three.Mesh sphere = three.Mesh(sphereGeo, mat);
@@ -1010,19 +1025,14 @@ class Cloth {
     }
 
     // Structural
-    for (int v = 0; v <= h; v++) {
-      for (int u = 0; u <= w; u++) {
-        if (v + 1 < h) {
+    for (int v = 0; v < h; v++) {
+      for (int u = 0; u < w; u++) {
           constraints.add([particles[index(u, v)], particles[index(u, v + 1)], restDistance]);
           particles[index(u, v)].constraints.add(particles[index(u, v + 1)]);
           springConstraints.add([particles[index(u, v)], particles[index(u, v + 1)], restDistance]);
-        }
-        if (u + 1 < w) {
           constraints.add([particles[index(u, v)], particles[index(u + 1, v)], restDistance]);
           particles[index(u, v)].constraints.add(particles[index(u + 1, v)]);
           springConstraints.add([particles[index(u, v)], particles[index(u + 1, v)], restDistance]);
-        }
-        if (v + 1 < h && u + 1 < w) {
           springConstraints.add([
             particles[index(u, v)],
             particles[index(u + 1, v + 1)],
@@ -1030,7 +1040,6 @@ class Cloth {
           ]);
 
           particles[index(u, v)].constraints.add(particles[index(u + 1, v + 1)]);
-        }
 
         if (u - 1 > 0) {
           springConstraints.add([
